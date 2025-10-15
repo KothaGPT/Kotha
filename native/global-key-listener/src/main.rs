@@ -8,7 +8,7 @@ use std::time::Duration;
 // Temporarily stub out rdev functionality since the private dependency is not accessible
 // This allows the build to succeed but disables keyboard event handling
 
-mod key_codes;
+// mod key_codes; // Commented out since rdev is not available
 
 #[cfg(target_os = "macos")]
 use cocoa::base::{id, nil};

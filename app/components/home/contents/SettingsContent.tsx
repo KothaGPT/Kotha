@@ -4,15 +4,17 @@ import AudioSettingsContent from './settings/AudioSettingsContent'
 import AccountSettingsContent from './settings/AccountSettingsContent'
 import KeyboardSettingsContent from './settings/KeyboardSettingsContent'
 import AdvancedSettingsContent from './settings/AdvancedSettingsContent'
+import { useTranslation } from 'react-i18next'
 
 export default function SettingsContent() {
   const { settingsPage, setSettingsPage } = useMainStore()
+  const { t } = useTranslation()
 
   const settingsMenuItems = [
-    { id: 'general', label: 'General', active: settingsPage === 'general' },
-    { id: 'keyboard', label: 'Keyboard', active: settingsPage === 'keyboard' },
-    { id: 'audio', label: 'Audio & Mic', active: settingsPage === 'audio' },
-    { id: 'account', label: 'Account', active: settingsPage === 'account' },
+    { id: 'general', label: t('settings.general'), active: settingsPage === 'general' },
+    { id: 'keyboard', label: t('settings.keyboard'), active: settingsPage === 'keyboard' },
+    { id: 'audio', label: t('settings.audioAndMic'), active: settingsPage === 'audio' },
+    { id: 'account', label: t('settings.account'), active: settingsPage === 'account' },
     { id: 'advanced', label: 'Advanced', active: settingsPage === 'advanced' },
   ]
 

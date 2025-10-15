@@ -28,6 +28,7 @@ import { getKeyDisplay } from '@/app/utils/keyboard'
 import { createStereo48kWavFromMonoPCM } from '@/app/utils/audioUtils'
 import { KeyName } from '@/lib/types/keyboard'
 import { usePlatform } from '@/app/hooks/usePlatform'
+import { useTranslation } from 'react-i18next'
 
 // Interface for interaction statistics
 interface InteractionStats {
@@ -67,6 +68,7 @@ export default function HomeContent() {
   const { user } = useAuthStore()
   const firstName = user?.name?.split(' ')[0]
   const platform = usePlatform()
+  const { t } = useTranslation()
   const [interactions, setInteractions] = useState<Interaction[]>([])
   const [loading, setLoading] = useState(true)
   const [playingAudio, setPlayingAudio] = useState<string | null>(null)
@@ -301,13 +303,13 @@ export default function HomeContent() {
         interaction.asr_output.error.includes('Unable to transcribe audio.')
       ) {
         return {
-          text: 'Audio is silent',
+          text: t('home.audioSilent'),
           isError: true,
           tooltip: "Kotha didn't detect any words so the transcript is empty",
         }
       }
       return {
-        text: 'Transcription failed',
+        text: t('home.transcriptionFailed'),
         isError: true,
         tooltip: interaction.asr_output.error,
       }
@@ -318,7 +320,7 @@ export default function HomeContent() {
 
     if (!transcript) {
       return {
-        text: 'Audio is silent.',
+        text: t('home.audioSilent'),
         isError: true,
         tooltip: "Kotha didn't detect any words so the transcript is empty",
       }
@@ -450,14 +452,14 @@ export default function HomeContent() {
         <div className="flex items-center justify-between mb-8">
           <div>
             <h1 className="text-2xl font-medium">
-              Welcome back{firstName ? `, ${firstName}!` : '!'}
+              {firstName ? t('home.welcomeBack', { name: firstName }) : t('home.welcome')}
             </h1>
           </div>
         </div>
         <div className="flex gap-4 w-full mb-6">
           <div className="flex w-full items-center text-sm text-gray-700 gap-2">
             <StatCard
-              title="Weekly Streak"
+              title={t('home.weeklyStreak')}
               value={formatStreakText(stats.streakDays)}
               description={getActivityMessage(
                 STREAK_MESSAGES,
@@ -473,8 +475,8 @@ export default function HomeContent() {
               }
             />
             <StatCard
-              title="Average Speed"
-              value={`${stats.averageWPM} words / minute`}
+              title={t('home.averageSpeed')}
+              value={`${stats.averageWPM} ${t('home.wordsPerMinute')}`}
               description={getActivityMessage(
                 SPEED_MESSAGES,
                 getSpeedLevel(stats.averageWPM),
@@ -486,8 +488,8 @@ export default function HomeContent() {
               }
             />
             <StatCard
-              title="Total Words"
-              value={`${stats.totalWords} ${stats.totalWords === 1 ? 'word' : 'words'}`}
+              title={t('home.totalWords')}
+              value={`${stats.totalWords} ${stats.totalWords === 1 ? t('home.word') : t('home.words')}`}
               description={getActivityMessage(
                 TOTAL_WORDS_MESSAGES,
                 getTotalWordsLevel(stats.totalWords),
@@ -505,10 +507,10 @@ export default function HomeContent() {
         <div className="bg-slate-100 rounded-xl p-6 flex items-center justify-between mb-10">
           <div>
             <div className="text-base font-medium mb-1">
-              Voice dictation in any app
+              {t('home.voiceDictation')}
             </div>
             <div className="text-sm text-gray-600">
-              <span key="hold-down">Hold down the trigger key </span>
+              <span key="hold-down">{t('home.dictationDescription')}</span>
               {keyboardShortcut.map((key, index) => (
                 <React.Fragment key={index}>
                   <span className="bg-slate-50 px-1 py-0.5 rounded text-xs font-mono shadow-sm">
@@ -520,7 +522,6 @@ export default function HomeContent() {
                   <span>{index < keyboardShortcut.length - 1 && ' + '}</span>
                 </React.Fragment>
               ))}
-              <span key="and"> and speak into any textbox</span>
             </div>
           </div>
           <button
@@ -529,13 +530,13 @@ export default function HomeContent() {
               window.api?.invoke('web-open-url', EXTERNAL_LINKS.WEBSITE)
             }
           >
-            Explore use cases
+            {t('home.exploreUseCases')}
           </button>
         </div>
 
         {/* Recent Activity Header */}
         <div className="text-sm text-muted-foreground mb-6">
-          Recent activity
+          {t('home.recentActivity')}
         </div>
       </div>
 
@@ -543,14 +544,13 @@ export default function HomeContent() {
       <div className="flex-1 px-24 overflow-y-auto scrollbar-hide">
         {loading ? (
           <div className="bg-white rounded-lg border border-slate-200 p-8 text-center text-gray-500">
-            Loading recent activity...
+            {t('home.loadingActivity')}
           </div>
         ) : interactions.length === 0 ? (
           <div className="bg-white rounded-lg border border-slate-200 p-8 text-center text-gray-500">
-            <p className="text-sm">No interactions yet</p>
+            <p className="text-sm">{t('home.noInteractions')}</p>
             <p className="text-xs mt-1">
-              Try using voice dictation by pressing{' '}
-              {keyboardShortcut.join(' + ')}
+              {t('home.tryDictation')} {keyboardShortcut.join(' + ')}
             </p>
           </div>
         ) : (
@@ -636,8 +636,8 @@ export default function HomeContent() {
                               </TooltipTrigger>
                               <TooltipContent side="top" sideOffset={5}>
                                 {copiedItems.has(interaction.id)
-                                  ? 'Copied 🎉'
-                                  : 'Copy'}
+                                  ? t('home.copied')
+                                  : t('home.copy')}
                               </TooltipContent>
                             </Tooltip>
                           )}
@@ -670,10 +670,10 @@ export default function HomeContent() {
                             </TooltipTrigger>
                             <TooltipContent side="top" sideOffset={5}>
                               {!interaction.raw_audio
-                                ? 'No audio available'
+                                ? t('home.noAudioAvailable')
                                 : playingAudio === interaction.id
-                                  ? 'Stop'
-                                  : 'Play'}
+                                  ? t('home.stop')
+                                  : t('home.play')}
                             </TooltipContent>
                           </Tooltip>
                         </div>

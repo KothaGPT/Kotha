@@ -1,0 +1,90 @@
+# .github/workflows/app-deploy.yml
+name: App CI/CD
+
+on:
+  workflow_call:
+    inputs:
+      environment:
+        type: string
+        required: true
+        description: 'The environment to build for'
+  workflow_dispatch:
+    inputs:
+      environment:
+        type: string
+        required: true
+        description: 'The environment to build for'
+
+permissions:
+  contents: read
+  id-token: write # needed for OIDC
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v1
+
+      - name: Install dependencies
+        working-directory: server
+        run: bun install
+
+      - name: Install jq
+        run: sudo apt-get update && sudo apt-get install -y jq
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          role-to-assume: arn:aws:iam::287641434880:role/KothaGitHubCiCdRole
+          aws-region: us-west-2
+
+      - name: Run migrations
+        run: |
+          aws lambda invoke \
+            --function-name ${{ vars.AWS_STAGE }}-KothaDb-migration \
+            --payload '{}' \
+            out.json
+
+          cat out.json
+
+          if jq -e '.FunctionError' out.json > /dev/null; then
+            echo "❌ Lambda execution failed:"
+            echo "Message: $(jq -r '.errorMessage' out.json)"
+            exit 1
+          fi
+
+          if jq -e '.errorType' out.json > /dev/null; then
+            echo "❌ Migration failed:"
+            echo "Error: $(jq -r '.errorType' out.json)"
+            echo "Message: $(jq -r '.errorMessage' out.json)"
+            exit 1
+          fi
+
+      - name: Login to ECR
+        run: |
+          aws ecr get-login-password \
+            | docker login \
+                --username AWS \
+                --password-stdin 287641434880.dkr.ecr.us-west-2.amazonaws.com
+
+      - name: Build & push multi-arch image
+        working-directory: server
+        run: |
+          docker buildx create --use
+          docker buildx build \
+            --platform linux/arm64,linux/amd64 \
+            --tag 287641434880.dkr.ecr.us-west-2.amazonaws.com/${{ vars.AWS_STAGE }}-kotha-server:latest \
+            --push .
+
+      - name: Force new ECS deployment
+        run: |
+          aws ecs update-service \
+            --cluster ${{ vars.AWS_STAGE }}-kotha-cluster \
+            --service ${{ vars.AWS_STAGE }}-kotha-service \
+            --force-new-deployment

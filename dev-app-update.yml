@@ -1,0 +1,6 @@
+owner: kothagpt
+repo: kotha
+provider: s3
+bucket: dev-kotha-releases
+path: manual-test/
+region: us-west-2

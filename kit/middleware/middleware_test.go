@@ -39,3 +39,17 @@ func TestWithRequestContextIsolation(t *testing.T) {
 	WithRequest(next).ServeHTTP(w, req)
 	assert.Equal(t, http.StatusOK, w.Code)
 }
+
+func TestWithRequestID(t *testing.T) {
+	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		id, ok := r.Context().Value(RequestKey{}).(string)
+		assert.True(t, ok, "expected request ID in context")
+		assert.Len(t, id, 32, "expected a 16-byte hexadecimal request ID")
+		assert.Equal(t, id, w.Header().Get("X-Request-ID"))
+		w.WriteHeader(http.StatusNoContent)
+	})
+
+	w := httptest.NewRecorder()
+	WithRequestID(next).ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/", nil))
+	assert.Equal(t, http.StatusNoContent, w.Code)
+}

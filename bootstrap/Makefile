@@ -65,8 +65,21 @@ dev:
 # build the application for production. This will compile your app
 # to a single binary with all its assets embedded.
 build: generate
-	@npx tailwindcss -i app/assets/app.css -o ./public/assets/styles.css
-	@npx esbuild app/assets/index.js --bundle --outdir=public/assets
+ifeq ($(OS),Windows_NT)
+	@if exist node_modules (
+		npx tailwindcss -i app/assets/app.css -o ./public/assets/styles.css &&
+		npx esbuild app/assets/index.js --bundle --outdir=public/assets
+	) else (
+		echo "node_modules not found, skipping asset build (using embedded public/ assets)"
+	)
+else
+	@if [ -d "node_modules" ]; then \
+		npx tailwindcss -i app/assets/app.css -o ./public/assets/styles.css && \
+		npx esbuild app/assets/index.js --bundle --outdir=public/assets; \
+	else \
+		echo "node_modules not found, skipping asset build (using embedded public/ assets)"; \
+	fi
+endif
 	@go build -o bin/app_prod ./cmd/app/
 	@echo "compiled you application with all its assets to a single binary => bin/app_prod"
 

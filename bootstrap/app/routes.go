@@ -3,6 +3,7 @@ package app
 import (
 	"log/slog"
 	"net/http"
+	"net/http/pprof"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -56,6 +57,16 @@ func InitializeMetricsRoute(router *chi.Mux) {
 	metricsRouter := chi.NewMux()
 	metricsRouter.Get("/metrics", kit.Handler(HandleMetrics))
 	router.Mount("/metrics", metricsRouter)
+}
+
+func InitializeDebugRoutes(router *chi.Mux) {
+	debugRouter := chi.NewMux()
+	debugRouter.Get("/pprof/", http.HandlerFunc(pprof.Index))
+	debugRouter.Get("/pprof/cmdline", http.HandlerFunc(pprof.Cmdline))
+	debugRouter.Get("/pprof/profile", http.HandlerFunc(pprof.Profile))
+	debugRouter.Get("/pprof/symbol", http.HandlerFunc(pprof.Symbol))
+	debugRouter.Get("/pprof/trace", http.HandlerFunc(pprof.Trace))
+	router.Mount("/debug/pprof", debugRouter)
 }
 
 func InitializeRoutes(router *chi.Mux) {

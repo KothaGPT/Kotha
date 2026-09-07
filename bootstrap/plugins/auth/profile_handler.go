@@ -1,7 +1,7 @@
 package auth
 
 import (
-	"AABBCCDD/app/db"
+	"github.com/khulnasoft/superkit/bootstrap/app/db"
 	"fmt"
 
 	"github.com/khulnasoft/superkit/kit"

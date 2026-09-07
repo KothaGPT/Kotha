@@ -45,12 +45,10 @@ func HandleProfileUpdate(kit *kit.Kit) error {
 	if auth.UserID != values.ID {
 		return fmt.Errorf("unauthorized request for profile %d", values.ID)
 	}
-	err := db.Get().Model(&User{}).
-		Where("id = ?", auth.UserID).
-		Updates(&User{
-			FirstName: values.FirstName,
-			LastName:  values.LastName,
-		}).Error
+	_, err := db.GetSQL().Exec(
+		"UPDATE users SET first_name = ?, last_name = ? WHERE id = ?",
+		values.FirstName, values.LastName, auth.UserID,
+	)
 	if err != nil {
 		return err
 	}

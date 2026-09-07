@@ -94,9 +94,9 @@ func HandleLoginDelete(kit *kit.Kit) error {
 		sess.Values = map[any]any{}
 		sess.Save(kit.Request, kit.Response)
 	}()
-	err := db.Get().Delete(&Session{}, "token = ?", sess.Values["sessionToken"]).Error
-	if err != nil {
-		return err
+	token, _ := sess.Values["sessionToken"].(string)
+	if token != "" {
+		db.GetSQL().Exec("DELETE FROM sessions WHERE token = ?", token)
 	}
 	return kit.Redirect(http.StatusSeeOther, "/")
 }

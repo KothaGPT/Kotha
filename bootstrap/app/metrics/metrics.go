@@ -4,6 +4,8 @@ import (
 	"net/http"
 	"sync"
 	"time"
+
+	"github.com/khulnasoft/superkit/event"
 )
 
 type RequestMetrics struct {
@@ -41,6 +43,8 @@ type MetricsSummary struct {
 	P50          time.Duration
 	P95          time.Duration
 	P99          time.Duration
+	EventDropped int64
+	EventQueue   int
 }
 
 func (m *RequestMetrics) Summary() MetricsSummary {
@@ -58,6 +62,9 @@ func (m *RequestMetrics) Summary() MetricsSummary {
 		s.P95 = percentile(m.Latencies, 95)
 		s.P99 = percentile(m.Latencies, 99)
 	}
+	eventStats := event.GetStats()
+	s.EventDropped = eventStats.Dropped
+	s.EventQueue = eventStats.QueueLen
 	return s
 }
 

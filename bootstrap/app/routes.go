@@ -105,6 +105,8 @@ func NotFoundHandler(kit *kit.Kit) error {
 }
 
 func ErrorHandler(kit *kit.Kit, err error) {
-	slog.Error("internal server error", "err", err.Error(), "path", kit.Request.URL.Path)
+	go func() {
+		slog.Error("internal server error", "err", err.Error(), "path", kit.Request.URL.Path)
+	}()
 	kit.Render(errors.Error500())
 }

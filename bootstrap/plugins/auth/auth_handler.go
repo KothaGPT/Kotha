@@ -41,7 +41,10 @@ func HandleLoginCreate(kit *kit.Kit) error {
 	}
 
 	var user User
-	err := db.Get().Find(&user, "email = ?", values.Email).Error
+	err := db.Get().
+		Model(&User{}).
+		Select("id", "email", "password_hash", "email_verified_at").
+		First(&user, "email = ?", values.Email).Error
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {
 			errors.Add("credentials", "invalid credentials")

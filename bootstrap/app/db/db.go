@@ -2,6 +2,7 @@ package db
 
 import (
 	"os"
+	"sync"
 	"time"
 
 	"github.com/khulnasoft/superkit/db"
@@ -15,6 +16,11 @@ import (
 var (
 	dbInstance *gorm.DB
 	initialized bool
+	cleanupOnce sync.Once
+	cleanupStopOnce sync.Once
+	cleanupTicker *time.Ticker
+	cleanupDone chan struct{}
+	cleanupMu sync.Mutex
 )
 
 // Get returns the instantiated DB instance. Panics if called before Initialize.
@@ -65,6 +71,22 @@ func Initialize() error {
 	}
 
 	initialized = true
+
+	cleanupOnce.Do(func() {
+		cleanupTicker = time.NewTicker(1 * time.Hour)
+		cleanupDone = make(chan struct{})
+		go func() {
+			for {
+				select {
+				case <-cleanupTicker.C:
+					dbInstance.Exec("DELETE FROM sessions WHERE expires_at < ?", time.Now())
+				case <-cleanupDone:
+					return
+				}
+			}
+		}()
+	})
+
 	return nil
 }
 
@@ -73,6 +95,15 @@ func Close() error {
 	if !initialized || dbInstance == nil {
 		return nil
 	}
+
+	cleanupMu.Lock()
+	if cleanupTicker != nil {
+		cleanupStopOnce.Do(func() {
+			cleanupTicker.Stop()
+			close(cleanupDone)
+		})
+	}
+	cleanupMu.Unlock()
 
 	sqlDB, err := dbInstance.DB()
 	if err != nil {

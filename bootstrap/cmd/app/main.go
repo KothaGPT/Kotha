@@ -1,20 +1,42 @@
 package main
 
 import (
-	"AABBCCDD/app"
-	"AABBCCDD/public"
+	"context"
 	"fmt"
-	"log"
 	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/joho/godotenv"
+	"github.com/khulnasoft/superkit/bootstrap/app"
+	"github.com/khulnasoft/superkit/bootstrap/app/conf"
+	"github.com/khulnasoft/superkit/bootstrap/app/db"
+	"github.com/khulnasoft/superkit/bootstrap/public"
 	"github.com/khulnasoft/superkit/kit"
 )
 
 func main() {
+	if err := godotenv.Load(); err != nil {
+		fmt.Printf("warning: could not load .env file: %v\n", err)
+	}
+
+	cfg, err := conf.Load()
+	if err != nil {
+		fmt.Printf("fatal: configuration error: %v\n", err)
+		os.Exit(1)
+	}
+
 	kit.Setup()
+
+	if err := db.Initialize(); err != nil {
+		fmt.Printf("fatal: database initialization failed: %v\n", err)
+		os.Exit(1)
+	}
+	defer db.Close()
+
 	router := chi.NewMux()
 
 	app.InitializeMiddleware(router)
@@ -31,16 +53,33 @@ func main() {
 	app.InitializeRoutes(router)
 	app.RegisterEvents()
 
-	listenAddr := os.Getenv("HTTP_LISTEN_ADDR")
-	// In development link the full Templ proxy url.
 	url := "http://localhost:7331"
 	if kit.IsProduction() {
-		url = fmt.Sprintf("http://localhost%s", listenAddr)
+		url = fmt.Sprintf("http://localhost%s", cfg.Listen)
 	}
 
-	fmt.Printf("application running in %s at %s\n", kit.Env(), url)
+	server := &http.Server{
+		Addr:    cfg.Listen,
+		Handler: router,
+	}
 
-	http.ListenAndServe(listenAddr, router)
+	go func() {
+		fmt.Printf("application running in %s at %s\n", kit.Env(), url)
+		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			fmt.Printf("fatal: server error: %v\n", err)
+			os.Exit(1)
+		}
+	}()
+
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	<-quit
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := server.Shutdown(ctx); err != nil {
+		fmt.Printf("server shutdown error: %v\n", err)
+	}
 }
 
 func staticDev() http.Handler {
@@ -56,10 +95,4 @@ func disableCache(next http.Handler) http.Handler {
 		w.Header().Set("Cache-Control", "no-store")
 		next.ServeHTTP(w, r)
 	})
-}
-
-func init() {
-	if err := godotenv.Load(); err != nil {
-		log.Fatal(err)
-	}
 }

@@ -8,65 +8,65 @@ import (
 	"time"
 )
 
+const shardCount = 256
+
+type clientCounter struct {
+	count    int
+	windowStart time.Time
+}
+
+type shard struct {
+	mu       sync.Mutex
+	counters map[string]clientCounter
+}
+
 type RateLimiter struct {
-	mu      sync.Mutex
-	clients map[string][]time.Time
-	limit   int
-	window  time.Duration
+	shards []shard
+	limit  int
+	window time.Duration
 }
 
 func NewRateLimiter(limit int, window time.Duration) *RateLimiter {
 	rl := &RateLimiter{
-		clients: make(map[string][]time.Time),
-		limit:   limit,
-		window:  window,
+		shards: make([]shard, shardCount),
+		limit:  limit,
+		window: window,
 	}
-	go rl.cleanup()
+	for i := range rl.shards {
+		rl.shards[i].counters = make(map[string]clientCounter)
+	}
 	return rl
 }
 
-func (rl *RateLimiter) cleanup() {
-	ticker := time.NewTicker(time.Minute)
-	defer ticker.Stop()
-	for range ticker.C {
-		rl.mu.Lock()
-		now := time.Now()
-		for ip, timestamps := range rl.clients {
-			var valid []time.Time
-			for _, ts := range timestamps {
-				if now.Sub(ts) < rl.window {
-					valid = append(valid, ts)
-				}
-			}
-			if len(valid) == 0 {
-				delete(rl.clients, ip)
-			} else {
-				rl.clients[ip] = valid
-			}
-		}
-		rl.mu.Unlock()
+func (rl *RateLimiter) shardForKey(key string) *shard {
+	h := 0
+	for i := range key {
+		h = 31*h + int(key[i])
 	}
+	return &rl.shards[h&(shardCount-1)]
 }
 
 func (rl *RateLimiter) Allow(key string) bool {
-	rl.mu.Lock()
-	defer rl.mu.Unlock()
+	s := rl.shardForKey(key)
+	s.mu.Lock()
+	defer s.mu.Unlock()
 
 	now := time.Now()
-	var valid []time.Time
-	for _, ts := range rl.clients[key] {
-		if now.Sub(ts) < rl.window {
-			valid = append(valid, ts)
+	c, exists := s.counters[key]
+	if !exists || now.Sub(c.windowStart) >= rl.window {
+		s.counters[key] = clientCounter{
+			count:       1,
+			windowStart: now,
 		}
+		return true
 	}
 
-	if len(valid) >= rl.limit {
-		rl.clients[key] = valid
+	if c.count >= rl.limit {
 		return false
 	}
 
-	valid = append(valid, now)
-	rl.clients[key] = valid
+	c.count++
+	s.counters[key] = c
 	return true
 }
 

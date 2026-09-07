@@ -39,6 +39,8 @@ func main() {
 
 	router := chi.NewMux()
 
+	app.InitializeHealthRoute(router)
+
 	app.InitializeMiddleware(router)
 
 	if kit.IsDevelopment() {
@@ -59,8 +61,13 @@ func main() {
 	}
 
 	server := &http.Server{
-		Addr:    cfg.Listen,
-		Handler: router,
+		Addr:              cfg.Listen,
+		Handler:           router,
+		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       15 * time.Second,
+		WriteTimeout:      30 * time.Second,
+		IdleTimeout:       120 * time.Second,
+		MaxHeaderBytes:    1 << 20, // 1MB
 	}
 
 	go func() {
@@ -87,7 +94,12 @@ func staticDev() http.Handler {
 }
 
 func staticProd() http.Handler {
-	return http.StripPrefix("/public/", http.FileServerFS(public.AssetsFS))
+	h := http.StripPrefix("/public/", http.FileServerFS(public.AssetsFS))
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+		w.Header().Set("Vary", "Accept-Encoding")
+		h.ServeHTTP(w, r)
+	})
 }
 
 func disableCache(next http.Handler) http.Handler {

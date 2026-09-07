@@ -23,8 +23,10 @@ func InitializeMiddleware(router *chi.Mux) {
 	csrf.Init(store)
 	router.Use(func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			sess, _ := store.Get(r, "csrf-session")
-			csrf.SetCSRTCookie(w, r, csrf.GenerateToken(sess))
+			if _, err := r.Cookie("csrf_token"); err != nil {
+				sess, _ := store.Get(r, "csrf-session")
+				csrf.SetCSRTCookie(w, r, csrf.GenerateToken(sess))
+			}
 			next.ServeHTTP(w, r)
 		})
 	})
@@ -32,10 +34,19 @@ func InitializeMiddleware(router *chi.Mux) {
 	router.Use(middleware.CSRFMiddleware)
 	router.Use(middleware.NewRateLimiter(5, time.Minute).Middleware(middleware.GetClientIP))
 
-	router.Use(chimiddleware.Logger)
+	if !kit.IsProduction() {
+		router.Use(chimiddleware.Logger)
+	}
+
 	router.Use(chimiddleware.Recoverer)
 	router.Use(kitmiddleware.WithRequest)
 	router.Use(kitmiddleware.WithRequestID)
+}
+
+func InitializeHealthRoute(router *chi.Mux) {
+	healthRouter := chi.NewMux()
+	healthRouter.Get("/health", kit.Handler(HandleHealth))
+	router.Mount("/health", healthRouter)
 }
 
 func InitializeRoutes(router *chi.Mux) {
@@ -57,8 +68,6 @@ func InitializeRoutes(router *chi.Mux) {
 		app.Get("/profile", kit.Handler(auth.HandleProfileShow))
 		app.Put("/profile", kit.Handler(auth.HandleProfileUpdate))
 	})
-
-	router.Get("/health", kit.Handler(HandleHealth))
 }
 
 func HandleHealth(kit *kit.Kit) error {

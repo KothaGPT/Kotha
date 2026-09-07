@@ -2,6 +2,7 @@ package db
 
 import (
 	"os"
+	"time"
 
 	"github.com/khulnasoft/superkit/db"
 
@@ -36,6 +37,17 @@ func Initialize() error {
 
 	dbinst, err := db.NewSQL(config)
 	if err != nil {
+		return err
+	}
+
+	dbinst.SetMaxOpenConns(5)
+	dbinst.SetMaxIdleConns(2)
+	dbinst.SetConnMaxLifetime(30 * time.Minute)
+
+	if _, err := dbinst.Exec("PRAGMA journal_mode=WAL"); err != nil {
+		return err
+	}
+	if _, err := dbinst.Exec("PRAGMA busy_timeout=5000"); err != nil {
 		return err
 	}
 

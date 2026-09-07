@@ -23,9 +23,11 @@ type UserWithVerificationToken struct {
 }
 
 type Auth struct {
-	UserID   uint
-	Email    string
-	LoggedIn bool
+	UserID    uint
+	Email     string
+	FirstName string
+	LastName  string
+	LoggedIn  bool
 }
 
 func (auth Auth) Check() bool {

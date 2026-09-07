@@ -41,7 +41,13 @@ func main() {
 
 	app.InitializeHealthRoute(router)
 
+	app.InitializeMetricsRoute(router)
+
 	app.InitializeMiddleware(router)
+
+	if os.Getenv("SUPERKIT_DEBUG") == "true" {
+		app.InitializeDebugRoutes(router)
+	}
 
 	if kit.IsDevelopment() {
 		router.Handle("/public/*", disableCache(staticDev()))

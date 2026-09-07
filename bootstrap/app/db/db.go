@@ -1,7 +1,9 @@
 package db
 
 import (
+	"database/sql"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/khulnasoft/superkit/db"
@@ -14,7 +16,13 @@ import (
 
 var (
 	dbInstance *gorm.DB
+	sqlDB     *sql.DB
 	initialized bool
+	cleanupOnce sync.Once
+	cleanupStopOnce sync.Once
+	cleanupTicker *time.Ticker
+	cleanupDone chan struct{}
+	cleanupMu sync.Mutex
 )
 
 // Get returns the instantiated DB instance. Panics if called before Initialize.
@@ -23,6 +31,14 @@ func Get() *gorm.DB {
 		panic("db: Get() called before Initialize()")
 	}
 	return dbInstance
+}
+
+// GetSQL returns the underlying *sql.DB for direct queries.
+func GetSQL() *sql.DB {
+	if !initialized || sqlDB == nil {
+		panic("db: GetSQL() called before Initialize()")
+	}
+	return sqlDB
 }
 
 // Initialize sets up the database connection from environment configuration.
@@ -64,7 +80,28 @@ func Initialize() error {
 		return err
 	}
 
+	sqlDB, err = dbInstance.DB()
+	if err != nil {
+		return err
+	}
+
 	initialized = true
+
+	cleanupOnce.Do(func() {
+		cleanupTicker = time.NewTicker(1 * time.Hour)
+		cleanupDone = make(chan struct{})
+		go func() {
+			for {
+				select {
+				case <-cleanupTicker.C:
+					dbInstance.Exec("DELETE FROM sessions WHERE expires_at < ?", time.Now())
+				case <-cleanupDone:
+					return
+				}
+			}
+		}()
+	})
+
 	return nil
 }
 
@@ -73,6 +110,15 @@ func Close() error {
 	if !initialized || dbInstance == nil {
 		return nil
 	}
+
+	cleanupMu.Lock()
+	if cleanupTicker != nil {
+		cleanupStopOnce.Do(func() {
+			cleanupTicker.Stop()
+			close(cleanupDone)
+		})
+	}
+	cleanupMu.Unlock()
 
 	sqlDB, err := dbInstance.DB()
 	if err != nil {

@@ -13,7 +13,6 @@ import (
 	"github.com/khulnasoft/superkit/kit"
 	v "github.com/khulnasoft/superkit/validate"
 	"golang.org/x/crypto/bcrypt"
-	"gorm.io/gorm"
 )
 
 const (
@@ -41,12 +40,16 @@ func HandleLoginCreate(kit *kit.Kit) error {
 	}
 
 	var user User
-	err := db.Get().Find(&user, "email = ?", values.Email).Error
+	err := db.GetSQL().QueryRow(
+		"SELECT id, email, password_hash, email_verified_at FROM users WHERE email = ?",
+		values.Email,
+	).Scan(&user.ID, &user.Email, &user.PasswordHash, &user.EmailVerifiedAt)
 	if err != nil {
-		if err == gorm.ErrRecordNotFound {
+		if err == sql.ErrNoRows {
 			errors.Add("credentials", "invalid credentials")
 			return kit.Render(LoginForm(values, errors))
 		}
+		return err
 	}
 
 	err = bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(values.Password))
@@ -91,9 +94,9 @@ func HandleLoginDelete(kit *kit.Kit) error {
 		sess.Values = map[any]any{}
 		sess.Save(kit.Request, kit.Response)
 	}()
-	err := db.Get().Delete(&Session{}, "token = ?", sess.Values["sessionToken"]).Error
-	if err != nil {
-		return err
+	token, _ := sess.Values["sessionToken"].(string)
+	if token != "" {
+		db.GetSQL().Exec("DELETE FROM sessions WHERE token = ?", token)
 	}
 	return kit.Redirect(http.StatusSeeOther, "/")
 }
@@ -149,6 +152,10 @@ func HandleEmailVerify(kit *kit.Kit) error {
 }
 
 func AuthenticateUser(kit *kit.Kit) (kit.Auth, error) {
+	return AuthenticateUserSQL(kit)
+}
+
+func AuthenticateUserSQL(kit *kit.Kit) (kit.Auth, error) {
 	auth := Auth{}
 	sess := kit.GetSession(userSessionName)
 	token, ok := sess.Values["sessionToken"]
@@ -156,26 +163,29 @@ func AuthenticateUser(kit *kit.Kit) (kit.Auth, error) {
 		return auth, nil
 	}
 
-	var session Session
-	if err := db.Get().
-		Model(&Session{}).
-		Select("user_id").
-		First(&session, "token = ? AND expires_at > ?", token, time.Now()).Error; err != nil {
-		if err == gorm.ErrRecordNotFound {
+	sqlDB := db.GetSQL()
+	var userID uint
+	err := sqlDB.QueryRow(
+		"SELECT user_id FROM sessions WHERE token = ? AND expires_at > ?",
+		token, time.Now(),
+	).Scan(&userID)
+	if err != nil {
+		if err == sql.ErrNoRows {
 			return auth, nil
 		}
 		return auth, err
 	}
-	if session.UserID == 0 {
+	if userID == 0 {
 		return auth, nil
 	}
 
-	var user User
-	if err := db.Get().
-		Model(&User{}).
-		Select("id", "email", "first_name", "last_name").
-		First(&user, session.UserID).Error; err != nil {
-		if err == gorm.ErrRecordNotFound {
+	var email, firstName, lastName string
+	err = sqlDB.QueryRow(
+		"SELECT id, email, first_name, last_name FROM users WHERE id = ?",
+		userID,
+	).Scan(&userID, &email, &firstName, &lastName)
+	if err != nil {
+		if err == sql.ErrNoRows {
 			return auth, nil
 		}
 		return auth, err
@@ -183,9 +193,9 @@ func AuthenticateUser(kit *kit.Kit) (kit.Auth, error) {
 
 	return Auth{
 		LoggedIn:  true,
-		UserID:    user.ID,
-		Email:     user.Email,
-		FirstName: user.FirstName,
-		LastName:  user.LastName,
+		UserID:    userID,
+		Email:     email,
+		FirstName: firstName,
+		LastName:  lastName,
 	}, nil
 }

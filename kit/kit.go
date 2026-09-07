@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"sync"
 
 	"github.com/a-h/templ"
 	"github.com/gorilla/sessions"
@@ -38,6 +39,25 @@ func (DefaultAuth) Check() bool { return false }
 type Kit struct {
 	Response http.ResponseWriter
 	Request  *http.Request
+}
+
+var kitPool = sync.Pool{
+	New: func() any {
+		return &Kit{}
+	},
+}
+
+func GetKit(w http.ResponseWriter, r *http.Request) *Kit {
+	kit := kitPool.Get().(*Kit)
+	kit.Response = w
+	kit.Request = r
+	return kit
+}
+
+func ReleaseKit(kit *Kit) {
+	kit.Response = nil
+	kit.Request = nil
+	kitPool.Put(kit)
 }
 
 func UseErrorHandler(h ErrorHandlerFunc) { errorHandler = h }
@@ -103,17 +123,16 @@ func (kit *Kit) Getenv(name string, def string) string {
 
 func Handler(h HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		kit := &Kit{
-			Response: w,
-			Request:  r,
-		}
+		kit := GetKit(w, r)
 		if err := h(kit); err != nil {
 			if errorHandler != nil {
 				errorHandler(kit, err)
+				ReleaseKit(kit)
 				return
 			}
 			kit.Text(http.StatusInternalServerError, err.Error())
 		}
+		ReleaseKit(kit)
 	}
 }
 

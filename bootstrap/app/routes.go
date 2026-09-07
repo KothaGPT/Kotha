@@ -3,12 +3,14 @@ package app
 import (
 	"log/slog"
 	"net/http"
+	"net/http/pprof"
 	"time"
 
 	"github.com/go-chi/chi/v5"
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
 	"github.com/gorilla/sessions"
 	"github.com/khulnasoft/superkit/bootstrap/app/handlers"
+	"github.com/khulnasoft/superkit/bootstrap/app/metrics"
 	"github.com/khulnasoft/superkit/bootstrap/app/views/errors"
 	"github.com/khulnasoft/superkit/bootstrap/kit/csrf"
 	"github.com/khulnasoft/superkit/bootstrap/kit/middleware"
@@ -41,12 +43,30 @@ func InitializeMiddleware(router *chi.Mux) {
 	router.Use(chimiddleware.Recoverer)
 	router.Use(kitmiddleware.WithRequest)
 	router.Use(kitmiddleware.WithRequestID)
+
+	router.Use(metrics.Middleware)
 }
 
 func InitializeHealthRoute(router *chi.Mux) {
 	healthRouter := chi.NewMux()
 	healthRouter.Get("/health", kit.Handler(HandleHealth))
 	router.Mount("/health", healthRouter)
+}
+
+func InitializeMetricsRoute(router *chi.Mux) {
+	metricsRouter := chi.NewMux()
+	metricsRouter.Get("/metrics", kit.Handler(HandleMetrics))
+	router.Mount("/metrics", metricsRouter)
+}
+
+func InitializeDebugRoutes(router *chi.Mux) {
+	debugRouter := chi.NewMux()
+	debugRouter.Get("/pprof/", http.HandlerFunc(pprof.Index))
+	debugRouter.Get("/pprof/cmdline", http.HandlerFunc(pprof.Cmdline))
+	debugRouter.Get("/pprof/profile", http.HandlerFunc(pprof.Profile))
+	debugRouter.Get("/pprof/symbol", http.HandlerFunc(pprof.Symbol))
+	debugRouter.Get("/pprof/trace", http.HandlerFunc(pprof.Trace))
+	router.Mount("/debug/pprof", debugRouter)
 }
 
 func InitializeRoutes(router *chi.Mux) {
@@ -70,6 +90,10 @@ func InitializeRoutes(router *chi.Mux) {
 	})
 }
 
+func HandleMetrics(kit *kit.Kit) error {
+	return kit.JSON(http.StatusOK, metrics.GetMetrics())
+}
+
 func HandleHealth(kit *kit.Kit) error {
 	kit.Response.Header().Set("Content-Type", "application/json")
 	kit.Response.WriteHeader(http.StatusOK)
@@ -81,6 +105,8 @@ func NotFoundHandler(kit *kit.Kit) error {
 }
 
 func ErrorHandler(kit *kit.Kit, err error) {
-	slog.Error("internal server error", "err", err.Error(), "path", kit.Request.URL.Path)
+	go func() {
+		slog.Error("internal server error", "err", err.Error(), "path", kit.Request.URL.Path)
+	}()
 	kit.Render(errors.Error500())
 }

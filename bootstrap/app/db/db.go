@@ -1,6 +1,7 @@
 package db
 
 import (
+	"database/sql"
 	"os"
 	"sync"
 	"time"
@@ -15,6 +16,7 @@ import (
 
 var (
 	dbInstance *gorm.DB
+	sqlDB     *sql.DB
 	initialized bool
 	cleanupOnce sync.Once
 	cleanupStopOnce sync.Once
@@ -29,6 +31,14 @@ func Get() *gorm.DB {
 		panic("db: Get() called before Initialize()")
 	}
 	return dbInstance
+}
+
+// GetSQL returns the underlying *sql.DB for direct queries.
+func GetSQL() *sql.DB {
+	if !initialized || sqlDB == nil {
+		panic("db: GetSQL() called before Initialize()")
+	}
+	return sqlDB
 }
 
 // Initialize sets up the database connection from environment configuration.
@@ -66,6 +76,11 @@ func Initialize() error {
 		return err
 	}
 
+	if err != nil {
+		return err
+	}
+
+	sqlDB, err = dbInstance.DB()
 	if err != nil {
 		return err
 	}

@@ -9,6 +9,7 @@ import (
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
 	"github.com/gorilla/sessions"
 	"github.com/khulnasoft/superkit/bootstrap/app/handlers"
+	"github.com/khulnasoft/superkit/bootstrap/app/metrics"
 	"github.com/khulnasoft/superkit/bootstrap/app/views/errors"
 	"github.com/khulnasoft/superkit/bootstrap/kit/csrf"
 	"github.com/khulnasoft/superkit/bootstrap/kit/middleware"
@@ -41,12 +42,20 @@ func InitializeMiddleware(router *chi.Mux) {
 	router.Use(chimiddleware.Recoverer)
 	router.Use(kitmiddleware.WithRequest)
 	router.Use(kitmiddleware.WithRequestID)
+
+	router.Use(metrics.Middleware)
 }
 
 func InitializeHealthRoute(router *chi.Mux) {
 	healthRouter := chi.NewMux()
 	healthRouter.Get("/health", kit.Handler(HandleHealth))
 	router.Mount("/health", healthRouter)
+}
+
+func InitializeMetricsRoute(router *chi.Mux) {
+	metricsRouter := chi.NewMux()
+	metricsRouter.Get("/metrics", kit.Handler(HandleMetrics))
+	router.Mount("/metrics", metricsRouter)
 }
 
 func InitializeRoutes(router *chi.Mux) {
@@ -68,6 +77,10 @@ func InitializeRoutes(router *chi.Mux) {
 		app.Get("/profile", kit.Handler(auth.HandleProfileShow))
 		app.Put("/profile", kit.Handler(auth.HandleProfileUpdate))
 	})
+}
+
+func HandleMetrics(kit *kit.Kit) error {
+	return kit.JSON(http.StatusOK, metrics.GetMetrics())
 }
 
 func HandleHealth(kit *kit.Kit) error {

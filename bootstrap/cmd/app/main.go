@@ -41,6 +41,8 @@ func main() {
 
 	app.InitializeHealthRoute(router)
 
+	app.InitializeMetricsRoute(router)
+
 	app.InitializeMiddleware(router)
 
 	if kit.IsDevelopment() {
